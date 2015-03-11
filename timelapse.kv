@@ -8,10 +8,12 @@
     stop_button: stop_button
     destination_button: destination_button
     size_spinner: size_spinner
-    
+    quality_slider: quality_slider
+    shutter_sound_switch: shutter_sound_switch
+
     BoxLayout:
         orientation: 'horizontal'
-        
+
         Label:
             text: "destination"
         Button:
@@ -35,21 +37,45 @@
             on_value: app.set_interval(self.value)
             size_hint_x: 3
             btn_size_hint_x: 1
-            
+
         Label:
             text: "second" if root.interval_spinbox.value == 1 else "seconds"
             size_hint_x: 1
 
     BoxLayout:
         orientation: 'horizontal'
-        
+
         Label:
             text: "Picture Size:"
 
         Spinner:
             id: size_spinner
             values: []
-    
+
+    BoxLayout:
+        orientation: 'horizontal'
+
+        Label:
+            text: "Picture Quality:"
+
+        Slider:
+            id: quality_slider
+            value: 90
+            min_value: 1
+            max_value: 100
+            step: 1
+
+        Label:
+            text: str(int(root.quality_slider.value))
+
+    BoxLayout:
+        orientation: 'horizontal'
+        Label:
+            text: "Shutter Sound:"
+        Switch:
+            id: shutter_sound_switch
+            active: True
+
     TextInput:
         id: console
         readonly: True

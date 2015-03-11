@@ -50,11 +50,13 @@ class TimelapseApp(App):
         Clock.schedule_once(lambda dt: self.popup.open(), 0)
         timelapse_widget = TimelapseWidget()
         timelapse_widget.size_spinner.bind(text=self.set_size)
+        timelapse_widget.quality_slider.bind(value=self.set_quality)
+        timelapse_widget.shutter_sound_switch.bind(active=self.set_shutter_sound)
         return timelapse_widget
 
     def set_size(self, widget, text):
         Logger.debug("timelapse: set_size: " + text)
-        self.sendMsg('/set/picture_size', map(int, text.split("x")))
+        self.sendMsg('/set/picture/size', map(int, text.split("x")))
 
     def oscInit(self):
         oscAPI.init()
@@ -62,7 +64,7 @@ class TimelapseApp(App):
         oscAPI.bind(self.oscId, self.receive_pong, '/pong')
         oscAPI.bind(self.oscId, self.receive_info, '/get/info')
         oscAPI.bind(self.oscId, self.receive_info_ready, '/get/info/ready')
-        oscAPI.bind(self.oscId, self.receive_picture_sizes, '/get/picture_sizes')
+        oscAPI.bind(self.oscId, self.receive_picture_sizes, '/get/picture/sizes')
         oscAPI.bind(self.oscId, self.receive_message, '/message')
         Clock.schedule_interval(lambda dt: oscAPI.readQueue(self.oscId), 0.1)
 
@@ -72,6 +74,14 @@ class TimelapseApp(App):
     def set_interval(self, value):
         Logger.info("timelapse: set interval %s" % str(value))
         self.sendMsg('/set/interval', str(value))
+
+    def set_shutter_sound(self, widget, value):
+        Logger.debug("timelapse: set shutter sound: %s" % str(value))
+        self.sendMsg('/set/shutter_sound', value)
+
+    def set_quality(self, widget, value):
+        Logger.info("timelapse: set quality %s" % str(value))
+        self.sendMsg('/set/picture/quality', int(value))
         
     def receive_pong(self, *args):
         Logger.info("timelapse: received pong")
@@ -101,10 +111,12 @@ class TimelapseApp(App):
     def disable_config(self):
         self.root.interval_spinbox.disabled = True
         self.root.destination_button.disabled = True
+        self.root.size_spinner.disabled = True
 
     def enable_config(self):
         self.root.interval_spinbox.disabled = False
         self.root.destination_button.disabled = False
+        self.root.size_spinner.disabled = False
 
     def start_taking_pictures(self):
         Logger.info("timelapse: start")
@@ -154,7 +166,11 @@ class TimelapseApp(App):
         picture_sizes = info['picture_sizes']
         Logger.debug("timelapse: picture_sizes: %s" % str(picture_sizes))
         self.root.size_spinner.values = [("%d x %d" % (size[0], size[1])) for size in picture_sizes]
-        Logger.debug("timelapse: spinner_values: %s" % str(self.root.size_spinner.values))
+        if info['can_disable_shutter_sound']:
+            self.root.shutter_sound_switch.disabled = False
+        else:
+            self.root.shutter_sound_switch.disabled = True
+            self.root.shutter_sound_switch.active = True
 
     def receive_info_ready(self, message, *args):
         Logger.info("timelapse: received info ready: %s" % str(message[2]))

@@ -14,6 +14,7 @@ activityPort = 56278
 #VideoEncoder = autoclass('android.media.MediaRecorder$VideoEncoder')
 #OutputFormat = autoclass('android.media.MediaRecorder$OutputFormat')
 Camera = autoclass('android.hardware.Camera')
+Camera_CameraInfo = autoclass('android.hardware.Camera$CameraInfo')
 Camera_Parameters = autoclass('android.hardware.Camera$Parameters')
 PythonService = autoclass('org.renpy.android.PythonService')
 SurfaceTexture = autoclass('android.graphics.SurfaceTexture')
@@ -62,6 +63,7 @@ class TimelapseService(object):
         Logger.debug("timelapse.service: __init__")
         self.sendMsg = make_sendMsg(activityPort)
         self.cam = None
+        self.camId = 0
         self.ready = False
         self.active = False
         self._running = None
@@ -86,9 +88,11 @@ class TimelapseService(object):
         oscAPI.bind(self.oscId, self.shutdown_if_inactive, "/shutdown_if_inactive")
         oscAPI.bind(self.oscId, self.get_info, "/get/info")
         oscAPI.bind(self.oscId, self.get_info_ready, "/get/info/ready")
-        oscAPI.bind(self.oscId, self.get_picture_sizes, "/get/picture_sizes")
+        oscAPI.bind(self.oscId, self.get_picture_sizes, "/get/picture/sizes")
         oscAPI.bind(self.oscId, self.set_interval, "/set/interval")
-        oscAPI.bind(self.oscId, self.set_picture_size, "/set/picture_size")
+        oscAPI.bind(self.oscId, self.set_shutter_sound, "/set/shutter_sound")
+        oscAPI.bind(self.oscId, self.set_picture_size, "/set/picture/size")
+        oscAPI.bind(self.oscId, self.set_picture_quality, "/set/picture/quality")
 
     def _setup_recorder(self):
         self.recorder = MediaRecorder()
@@ -233,17 +237,25 @@ class TimelapseService(object):
         if was_active:
             self.start()
 
+    def set_shutter_sound(self, message, *args):
+        self.shutter_sound = eval(message[2])
+        Logger.info("timelapse.service: set shutter sound to %s" % str(self.shutter_sound))
+        if not self.shutter_sound and self._can_disable_shutter_sound():
+            self.cam.enableShutterSound(False)
+        else:
+            self.cam.enableShutterSound(True)
+
+    def set_picture_quality(self, message, *args):
+        quality = eval(message[2])
+        self.cam_params.setJpegQuality(quality)
+        self.cam.setParameters(self.cam_params)
+        Logger.info("timelapse.service: set quality to %d" % quality)
+
     def set_picture_size(self, message, *args):
-        Logger.debug("timelapse.service: set_picture_size: %s" % str(message[2]))
-        was_active = self.active
-        if was_active:
-            self.stop()
         size = eval(message[2])
         self.cam_params.setPictureSize(size[0], size[1])
         self.cam.setParameters(self.cam_params)
         Logger.info("timelapse.service: set picture size to %s" % str(size))
-        if was_active:
-            self.start()
 
     def get_info(self, *args):
         Logger.info("timelapse.service: get_info")
@@ -251,7 +263,10 @@ class TimelapseService(object):
                                    "active": self.active,
                                    "pictures_taken": self.pictures_taken,
                                    "next_filename": self.get_next_name(),
-                                   "picture_sizes": self._get_picture_sizes()})
+                                   "picture_sizes": self._get_picture_sizes(),
+                                   "picture_size": self._get_picture_size(),
+                                   "quality": self._get_quality(),
+                                   "can_disable_shutter_sound": self._can_disable_shutter_sound()})
 
     def get_info_ready(self, *args):
         Logger.info("timelapse.service: get_info_ready")
@@ -259,19 +274,33 @@ class TimelapseService(object):
 
     def _get_picture_sizes(self, *args):
         sizes = []
-        if self.cam:
-            params = self.cam.getParameters()
-            l = params.getSupportedPictureSizes()
+        if self.cam and self.cam_params:
+            l = self.cam_params.getSupportedPictureSizes()
             for i in xrange(l.size()):
                 size = l.get(i)
                 sizes.append([size.width, size.height])
         return sizes
 
+    def _get_quality(self, *args):
+        return self.cam_params.getJpegQuality() if self.cam_params else -1
+            
+    def _get_picture_size(self, *args):
+        size = (0, 0)
+        if self.cam and self.cam_params:
+            size_obj = self.cam_params.getPictureSize()
+            size = (size_obj.width, size_obj.height)
+        return size
+
     def get_picture_sizes(self, *args):
         Logger.info("timelapse.service: get_picture_sizes")
         sizes = self._get_picture_sizes()
         self.sendMsg("/get/picture_sizes", sizes)
-        
+
+    def _can_disable_shutter_sound(self, *args):
+        Logger.info("timelapse.service: _can_disable_shutter_sound")
+        camera_info = Camera_CameraInfo()
+        Camera.getCameraInfo(self.camId, camera_info)
+        return camera_info.canDisableShutterSound
 
 if __name__ == '__main__':
     timelapseService = TimelapseService()
