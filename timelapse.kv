@@ -1,0 +1,88 @@
+#:kivy 1.4.0
+
+<TimelapseWidget>:
+    orientation: 'vertical'
+    console: console
+    interval_spinbox: interval_spinbox
+    start_button: start_button
+    stop_button: stop_button
+    destination_button: destination_button
+    
+    BoxLayout:
+        orientation: 'horizontal'
+        
+        Label:
+            text: "destination"
+        Button:
+            id: destination_button
+            text: "..."
+            on_release: app.select_dest_dir()
+
+    BoxLayout:
+        orientation: 'horizontal'
+
+        Label:
+            text: "Take Picture every"
+            size_hint_x: 2
+
+        SpinBox:
+            id: interval_spinbox
+            min_value: 1
+            max_value: 60
+            step: 1
+            value: 1
+            on_value: app.set_interval(self.value)
+            size_hint_x: 3
+            btn_size_hint_x: 1
+            
+        Label:
+            text: "second" if root.interval_spinbox.value == 1 else "seconds"
+            size_hint_x: 1
+
+    BoxLayout:
+        orientation: 'horizontal'
+        
+        Label:
+            text: "Picture Size:"
+
+        Spinner:
+            values: []
+    
+    TextInput:
+        id: console
+        readonly: True
+        size_hint_y: 10
+
+    BoxLayout:
+        Button:
+            id: start_button
+            text: 'Start'
+            on_press: app.start_taking_pictures()
+        Button:
+            id: stop_button
+            text: 'Stop'
+            on_press: app.stop_taking_pictures()
+            disabled: True
+        Button:
+            text: 'Info'
+            on_press: app.get_info()
+        Button:
+            text: 'Shutdown'
+            on_press: app.shutdown()
+
+
+<InitPopup>:
+    title: "Connecting..."
+    auto_dismiss: False
+    size_hint: 1, 1
+    size: root.size
+
+    BoxLayout:
+        orientation: 'vertical'
+        Label:
+            text: "Connecting to timelapse service..."
+            size_hint: 1, 1
+        Button:
+            text: "Abort"
+            on_press: app.stop()
+            size_hint_y: None
