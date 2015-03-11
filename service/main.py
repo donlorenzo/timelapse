@@ -68,6 +68,7 @@ class TimelapseService(object):
         self.filename_cnt = 1
         self.interval = 1
         self.pictures_taken = 0
+        self.cam_params = {}
         self.service = cast('android.app.Service', PythonService.mService)
         self._oscInit()
         self._setup_cam()
@@ -85,8 +86,9 @@ class TimelapseService(object):
         oscAPI.bind(self.oscId, self.shutdown_if_inactive, "/shutdown_if_inactive")
         oscAPI.bind(self.oscId, self.get_info, "/get/info")
         oscAPI.bind(self.oscId, self.get_info_ready, "/get/info/ready")
-        oscAPI.bind(self.oscId, self.set_interval, "/set/interval")
         oscAPI.bind(self.oscId, self.get_picture_sizes, "/get/picture_sizes")
+        oscAPI.bind(self.oscId, self.set_interval, "/set/interval")
+        oscAPI.bind(self.oscId, self.set_picture_size, "/set/picture_size")
 
     def _setup_recorder(self):
         self.recorder = MediaRecorder()
@@ -103,22 +105,22 @@ class TimelapseService(object):
     def _setup_cam(self):
         Logger.info("timelapse.service: preparing camera")
         self.cam = Camera.open(0)
-        params = self.cam.getParameters()
-        Logger.debug("timelapse.service: cam.params.pictureFormat: %s" % params.getPictureFormat())
-        Logger.debug("timelapse.service: cam.params.flash: %s" % params.getFlashMode())
-        Logger.debug("timelapse.service: cam.params.jpegQuality: %s" % params.getJpegQuality())
-        Logger.debug("timelapse.service: cam.params.pictureSize: %dx%d" % (params.getPictureSize().width, params.getPictureSize().height))
+        self.cam_params = self.cam.getParameters()
+        Logger.debug("timelapse.service: cam.params.pictureFormat: %s" % self.cam_params.getPictureFormat())
+        Logger.debug("timelapse.service: cam.params.flash: %s" % self.cam_params.getFlashMode())
+        Logger.debug("timelapse.service: cam.params.jpegQuality: %s" % self.cam_params.getJpegQuality())
+        Logger.debug("timelapse.service: cam.params.pictureSize: %dx%d" % (self.cam_params.getPictureSize().width, self.cam_params.getPictureSize().height))
         ranges = []
-        l = params.getSupportedPreviewFpsRange()
+        l = self.cam_params.getSupportedPreviewFpsRange()
         for i in xrange(l.size()):
             ranges.append(l.get(i))
         Logger.debug("timelapse.service: cam.params.supportedPreviewRanges: %s" % str(ranges))
         sizes = self._get_picture_sizes()
         Logger.debug("timelapse.service: cam.params.supportedPictureSizes: %s" % str(sizes))
 
-        params.setPictureFormat(ImageFormat.JPEG)
-        params.setFlashMode(Camera_Parameters.FLASH_MODE_OFF)
-        self.cam.setParameters(params)
+        self.cam_params.setPictureFormat(ImageFormat.JPEG)
+        self.cam_params.setFlashMode(Camera_Parameters.FLASH_MODE_OFF)
+        self.cam.setParameters(self.cam_params)
         self.texture = SurfaceTexture(0)
         Logger.debug("timelapse.service: texture: %s" % str(self.texture))
         self.cam.setPreviewTexture(self.texture)
@@ -223,12 +225,23 @@ class TimelapseService(object):
             self._running = False
 
     def set_interval(self, message, *args):
-        type(message[2])
         was_active = self.active
         if was_active:
             self.stop()
         self.interval = int(message[2])
         Logger.info("timelapse.service: set interval to %d" % self.interval)
+        if was_active:
+            self.start()
+
+    def set_picture_size(self, message, *args):
+        Logger.debug("timelapse.service: set_picture_size: %s" % str(message[2]))
+        was_active = self.active
+        if was_active:
+            self.stop()
+        size = eval(message[2])
+        self.cam_params.setPictureSize(size[0], size[1])
+        self.cam.setParameters(self.cam_params)
+        Logger.info("timelapse.service: set picture size to %s" % str(size))
         if was_active:
             self.start()
 
@@ -238,7 +251,7 @@ class TimelapseService(object):
                                    "active": self.active,
                                    "pictures_taken": self.pictures_taken,
                                    "next_filename": self.get_next_name(),
-                                   "picture_sizes:": self._get_picture_sizes()})
+                                   "picture_sizes": self._get_picture_sizes()})
 
     def get_info_ready(self, *args):
         Logger.info("timelapse.service: get_info_ready")

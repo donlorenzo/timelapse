@@ -13,7 +13,7 @@ from kivy.uix.popup import Popup
 from kivy.uix.boxlayout import BoxLayout
 
 try:
-    from service.main import servicePort, activityPort
+    from service.main import servicePort, activityPort, make_sendMsg
 except ImportError as e:
     Logger.error("failed to import service-/activityPort from service.main.\nThere is probably a SyntaxError in service.main that buildozer doesn't report.")
     raise e
@@ -40,6 +40,7 @@ class TimelapseWidget(BoxLayout):
 class TimelapseApp(App):
     def build(self):
         Logger.debug("timelapse: build main app")
+        self.sendMsg = make_sendMsg(servicePort)
         self.pong_callbacks = []
         self.callbacks = {}
         self.service = None
@@ -47,7 +48,13 @@ class TimelapseApp(App):
         self.ensure_service_is_running()
         self.popup = InitPopup()
         Clock.schedule_once(lambda dt: self.popup.open(), 0)
-        return TimelapseWidget()
+        timelapse_widget = TimelapseWidget()
+        timelapse_widget.size_spinner.bind(text=self.set_size)
+        return timelapse_widget
+
+    def set_size(self, widget, text):
+        Logger.debug("timelapse: set_size: " + text)
+        self.sendMsg('/set/picture_size', map(int, text.split("x")))
 
     def oscInit(self):
         oscAPI.init()
@@ -58,13 +65,6 @@ class TimelapseApp(App):
         oscAPI.bind(self.oscId, self.receive_picture_sizes, '/get/picture_sizes')
         oscAPI.bind(self.oscId, self.receive_message, '/message')
         Clock.schedule_interval(lambda dt: oscAPI.readQueue(self.oscId), 0.1)
-        
-    def sendMsg(self, channel, message=None):
-        if message is None:
-            message = []
-        if type(message) != list:
-            message = [message]
-        oscAPI.sendMsg(channel, message, port=servicePort)
 
     def ping_service(self):
         self.sendMsg('/ping')
@@ -151,12 +151,17 @@ class TimelapseApp(App):
         Logger.info("timelapse: received info: %s" % str(message[2]))
         info = eval(message[2])
         self.root.console.text += "\n" + str(info)
+        picture_sizes = info['picture_sizes']
+        Logger.debug("timelapse: picture_sizes: %s" % str(picture_sizes))
+        self.root.size_spinner.values = [("%d x %d" % (size[0], size[1])) for size in picture_sizes]
+        Logger.debug("timelapse: spinner_values: %s" % str(self.root.size_spinner.values))
 
     def receive_info_ready(self, message, *args):
         Logger.info("timelapse: received info ready: %s" % str(message[2]))
         ready = eval(message[2])
         if ready:
             self.popup.dismiss()
+            self.sendMsg('/get/info')
 
     def receive_message(self, message, *args):
         Logger.debug("timelapse: received message: %s" % str(message[2]))
